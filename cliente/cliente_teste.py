@@ -8,9 +8,16 @@ async def enviar_sinal(h, g, linha, coluna):
     user = f"user_{random.randint(1, 100)}"
     modelo = {"rows": linha, "cols": coluna}
     alg = "CGNR" if random.randint(1, 2) == 1 else "CGNE"
-    print(f"Modelo: {modelo}")
+    sinais = str(h) + " e " + str(g)
 
-    dados = {"user": user, "alg": alg, "modelo": modelo, "H": h, "g": g}
+    dados = {
+        "user": user,
+        "alg": alg,
+        "modelo": modelo,
+        "H": h,
+        "g": g,
+        "sinais": sinais,
+    }
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
@@ -38,12 +45,12 @@ async def monitorar_desempenho():
 
 # Função principal para rodar as tarefas assíncronas
 async def rodar_tarefas():
-    iterations = random.randint(1, 2)  # Definindo um número de iterações para testar
+    iterations = random.randint(1, 8)  # Definindo um número de iterações para testar
     tasks = []  # Lista de tarefas assíncronas a serem executadas
     print("Gerarei " + str(iterations) + " imagens!")
 
     for i in range(iterations):
-        random_number = random.randint(1, 4)
+        random_number = random.randint(1, 6)
         H_1 = "H-1.csv"
         G_1 = "G-1.csv"
         G_2 = "G-2.csv"
@@ -59,18 +66,18 @@ async def rodar_tarefas():
         elif random_number == 2:
             print("Enviando Sinais H_1 e G_2")
             tasks.append(enviar_sinal(H_1, G_2, 60, 60))
-        # elif random_number == 3:
-        #     print("Enviando Sinais H_1 e G_3")
-        #     tasks.append(enviar_sinal(H_1, G_3, 60, 60))
         elif random_number == 3:
+            print("Enviando Sinais H_1 e G_3")
+            tasks.append(enviar_sinal(H_1, G_3, 60, 60))
+        elif random_number == 4:
             print("Enviando Sinais H_2 e g_1")
             tasks.append(enviar_sinal(H_2, g_1, 30, 30))
-        elif random_number == 4:
+        elif random_number == 5:
             print("Enviando Sinais H_2 e g_2")
             tasks.append(enviar_sinal(H_2, g_2, 30, 30))
-        # elif random_number == 5:
-        #     print("Enviando Sinais H_2 e g_3")
-        #     tasks.append(enviar_sinal(H_2, g_3, 30, 30))
+        elif random_number == 6:
+            print("Enviando Sinais H_2 e g_3")
+            tasks.append(enviar_sinal(H_2, g_3, 30, 30))
 
         # Monitorar o desempenho também como uma tarefa assíncrona
         tasks.append(monitorar_desempenho())

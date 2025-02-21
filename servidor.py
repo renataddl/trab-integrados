@@ -20,76 +20,73 @@ MIN_FREE_MEMORY_MB = 4000
 app = Flask(__name__)
 database = {}
 
+
 def CGNE(H, g, tol=1e-4, max_iter=20):
     # Inicialização
     m, n = H.shape
-    y = np.zeros((m, 1))         # Variável do sistema H H^T y = g
-    r = g - H @ (H.T @ y)        # Resíduo do sistema original (g - H f)
-    z = r.copy()                 # Resíduo das equações normais (H H^T y = g)
-    p = z.copy()                 # Direção de busca
-    
-    f = H.T @ y                  # Solução inicial f = H^T y
+    y = np.zeros((m, 1))  # Variável do sistema H H^T y = g
+    r = g - H @ (H.T @ y)  # Resíduo do sistema original (g - H f)
+    z = r.copy()  # Resíduo das equações normais (H H^T y = g)
+    p = z.copy()  # Direção de busca
+
+    f = H.T @ y  # Solução inicial f = H^T y
     residuals = [np.linalg.norm(z)]
-    
+
     for i in range(max_iter):
-        Hp = H @ (H.T @ p)       # Produto H H^T p
+        Hp = H @ (H.T @ p)  # Produto H H^T p
         alpha = (z.T @ z) / (p.T @ Hp)
-        
+
         # Atualiza y e o resíduo
         y += alpha * p
-        r -= alpha * Hp          # Resíduo do sistema original
-        z = r.copy()             # Resíduo das equações normais
-        
+        r -= alpha * Hp  # Resíduo do sistema original
+        z = r.copy()  # Resíduo das equações normais
+
         # Atualiza f (solução do problema original)
         f = H.T @ y
-        
+
         # Verifica convergência
         residual_norm = np.linalg.norm(z)
         residuals.append(residual_norm)
         if residual_norm < tol:
             break
-        
+
         # Atualiza beta e a direção de busca
         beta = (z.T @ z) / (residuals[-2] ** 2)
         p = z + beta * p
-    
+
     return f, residuals
 
 
-def CGNR(H, g, tol=1e-6, max_iter=1000):
-     # Inicialização
-    f = np.zeros((H.shape[1]))
-    r = g - H @ f
-    z = H.T @ r
-    p = z.copy()
-    
+def CGNR(H, g, tol=1e-4, max_iter=20):
+    # Inicialização
+    m, n = H.shape
+    f = np.zeros((n, 1))  # Solução inicial
+    r = g - H @ f  # Resíduo do sistema original (g - H f)
+    z = H.T @ r  # Resíduo das equações normais (H^T H f = H^T g)
+    p = z.copy()  # Direção de busca
+
     residuals = [np.linalg.norm(z)]
-    
+
     for i in range(max_iter):
-        w = H @ p
-        alpha = np.dot(z, z) / np.dot(w, w)
-        
-        # Atualiza solução e resíduo
+        Hp = H @ p  # Produto H p
+        alpha = (z.T @ z) / (Hp.T @ Hp)
+
+        # Atualiza f e o resíduo
         f += alpha * p
-        r -= alpha * w
-        
-        # Calcula novo resíduo das equações normais
-        z_next = H.T @ r
-        
+        r -= alpha * Hp  # Resíduo do sistema original
+        z = H.T @ r  # Resíduo das equações normais
+
         # Verifica convergência
-        residual_norm = np.linalg.norm(z_next)
+        residual_norm = np.linalg.norm(z)
         residuals.append(residual_norm)
-        
         if residual_norm < tol:
             break
-            
-        # Atualiza parâmetros para próxima iteração
-        beta = np.dot(z_next, z_next) / np.dot(z, z)
-        p = z_next + beta * p
-        z = z_next
-    
-    return f, residuals
 
+        # Atualiza beta e a direção de busca
+        beta = (z.T @ z) / (residuals[-2] ** 2)
+        p = z + beta * p
+
+    return f, residuals
 
 
 def gerar_imagem(dados, titulo="ABS", nome_arquivo="imagem.png"):
@@ -104,11 +101,11 @@ def process(data):
     user = data["user"]
     modelo = data["modelo"]
     alg = data["alg"]
+    sinais = data["sinais"]
 
     while not check_memory():
         print("Waiting for memory...")
         time.sleep(1)
-
 
     H = pd.read_csv("cliente/" + data["H"], header=None, delimiter=",").to_numpy()
     g = pd.read_csv("cliente/" + data["g"], header=None, delimiter=",").to_numpy()
@@ -145,6 +142,7 @@ def process(data):
         "tamanho_imagem": tamanho_imagem,
         "arquivo_imagem": nome_arquivo,
         "algoritmo": alg,
+        "sinais": sinais,
     }
 
     # Salvando a resposta como JSON em um arquivo
