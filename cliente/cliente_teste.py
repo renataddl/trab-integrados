@@ -19,7 +19,8 @@ async def enviar_sinal(h, g, linha, coluna):
         "sinais": sinais,
     }
 
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=300)  # Aumenta o timeout para 60 segundos
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(
             "http://localhost:5001/reconstruir_imagem", json=dados
         ) as response:

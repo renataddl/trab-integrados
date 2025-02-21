@@ -12,6 +12,7 @@ import asyncio
 import json
 from datetime import datetime
 import psutil
+import os
 
 MIN_FREE_MEMORY_MB = 4000
 
@@ -90,11 +91,12 @@ def CGNR(H, g, tol=1e-4, max_iter=20):
 
 
 def gerar_imagem(dados, titulo="ABS", nome_arquivo="imagem.png"):
+    caminho_arquivo = os.path.join("imagens", nome_arquivo)  # Caminho completo
     dados_rotacionados = rotate(dados, angle=-90, reshape=True, mode="nearest")
     dados_rotacionados = np.fliplr(dados_rotacionados)
     plt.imshow(np.abs(dados_rotacionados), cmap="gray", interpolation="nearest")
     plt.title(titulo)
-    plt.savefig(nome_arquivo)
+    plt.savefig(caminho_arquivo)
 
 
 def process(data):
@@ -107,8 +109,8 @@ def process(data):
         print("Waiting for memory...")
         time.sleep(1)
 
-    H = pd.read_csv("cliente/" + data["H"], header=None, delimiter=",").to_numpy()
-    g = pd.read_csv("cliente/" + data["g"], header=None, delimiter=",").to_numpy()
+    H = pd.read_csv("cliente/dados/" + data["H"], header=None, delimiter=",").to_numpy()
+    g = pd.read_csv("cliente/dados/" + data["g"], header=None, delimiter=",").to_numpy()
 
     start_time = time.time()
     if alg == "CGNR":
@@ -148,7 +150,8 @@ def process(data):
     # Salvando a resposta como JSON em um arquivo
     timestamp = int(time.time())
     nome_json = f"resposta_{user}_{timestamp}.json"
-    with open(nome_json, "w") as json_file:
+    caminho_json = os.path.join("relatorios", nome_json)
+    with open(caminho_json, "w") as json_file:
         json.dump(resposta_json, json_file, indent=4)
 
     return jsonify(resposta_json)
