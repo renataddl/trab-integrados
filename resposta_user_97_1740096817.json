@@ -1,0 +1,11 @@
+{
+    "usuario": "user_97",
+    "iteracoes": 6,
+    "tempo_execucao": 0.7915012836456299,
+    "tamanho_imagem": [
+        60,
+        60
+    ],
+    "arquivo_imagem": "imagem_user_97_1740096815.png",
+    "algoritmo": "CGNE"
+}
