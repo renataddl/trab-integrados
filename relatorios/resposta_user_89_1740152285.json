@@ -1,0 +1,15 @@
+{
+    "usuario": "user_89",
+    "iteracoes": [
+        6.101939460218733e-08,
+        2.0888969134036465e-08
+    ],
+    "tempo_execucao": 0.08802008628845215,
+    "tamanho_imagem": [
+        30,
+        30
+    ],
+    "arquivo_imagem": "imagem_user_89_1740152285.png",
+    "algoritmo": "CGNR",
+    "sinais": "H-2.csv e g-30x30-1.csv"
+}
