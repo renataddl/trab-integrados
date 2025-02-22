@@ -1,26 +1,63 @@
-from flask import Flask, request, jsonify, make_response
+import os
+import logging
+from logging.handlers import RotatingFileHandler
+from flask import Flask, request, jsonify
 import numpy as np
 import pandas as pd
 import time
-import psutil  # Para monitorar
+import psutil
 from scipy.ndimage import rotate
 import matplotlib.pyplot as plt
-import threading
 import multiprocessing
-import json
 import asyncio
 import json
-from datetime import datetime
-import psutil
-import os
 
+# Configuração de logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        RotatingFileHandler('server.log', maxBytes=10*1024*1024, backupCount=5),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Constantes
 MIN_FREE_MEMORY_MB = 4000
-
-# import resource
-
 app = Flask(__name__)
-database = {}
 
+# Função para criar pastas necessárias
+def criar_pastas():
+    pastas = ["imagens", "relatorios"]
+    for pasta in pastas:
+        if not os.path.exists(pasta):
+            os.makedirs(pasta)
+            logger.info(f"Pasta '{pasta}' criada.")
+
+# Cria as pastas ao iniciar o servidor
+criar_pastas()
+
+class MemoryMonitor:
+    def __init__(self):
+        self.last_log_time = time.time()
+        self.log_interval = 60  # Segundos entre logs de memória
+
+    def check_memory(self):
+        mem = psutil.virtual_memory()
+        available_mb = mem.available / (1024 * 1024)
+        
+        # Log a cada intervalo definido
+        if time.time() - self.last_log_time > self.log_interval:
+            logger.info(
+                f"Memory Status | Available: {available_mb:.2f}MB, "
+                f"Used: {mem.percent}%"
+            )
+            self.last_log_time = time.time()
+        
+        return available_mb > MIN_FREE_MEMORY_MB
+
+memory_monitor = MemoryMonitor()
 
 def CGNE(H, g, tol=1e-4, max_iter=20):
     # Inicialização
@@ -57,25 +94,28 @@ def CGNE(H, g, tol=1e-4, max_iter=20):
 
     return f, residuals
 
-
 def CGNR(H, g, tol=1e-4, max_iter=20):
+    # Certifique-se de que H e g são arrays NumPy
+    H = np.array(H, dtype=float)
+    g = np.array(g, dtype=float).reshape(-1, 1)  # Transforma g em um vetor coluna
+
     # Inicialização
     m, n = H.shape
-    f = np.zeros((n, 1))  # Solução inicial
-    r = g - H @ f  # Resíduo do sistema original (g - H f)
-    z = H.T @ r  # Resíduo das equações normais (H^T H f = H^T g)
+    f = np.zeros((n, 1))  # Solução inicial (vetor coluna)
+    r = g - np.dot(H, f)  # Resíduo do sistema original (g - H @ f)
+    z = np.dot(H.T, r)  # Resíduo das equações normais (H^T H f = H^T g)
     p = z.copy()  # Direção de busca
 
     residuals = [np.linalg.norm(z)]
 
     for i in range(max_iter):
-        Hp = H @ p  # Produto H p
-        alpha = (z.T @ z) / (Hp.T @ Hp)
+        Hp = np.dot(H, p)  # Produto H p
+        alpha = np.dot(z.T, z) / np.dot(Hp.T, Hp)
 
         # Atualiza f e o resíduo
         f += alpha * p
-        r -= alpha * Hp  # Resíduo do sistema original
-        z = H.T @ r  # Resíduo das equações normais
+        r -= alpha * Hp
+        z = np.dot(H.T, r)  # Resíduo das equações normais
 
         # Verifica convergência
         residual_norm = np.linalg.norm(z)
@@ -84,11 +124,10 @@ def CGNR(H, g, tol=1e-4, max_iter=20):
             break
 
         # Atualiza beta e a direção de busca
-        beta = (z.T @ z) / (residuals[-2] ** 2)
+        beta = np.dot(z.T, z) / (residuals[-2] ** 2)
         p = z + beta * p
 
     return f, residuals
-
 
 def gerar_imagem(dados, titulo="ABS", nome_arquivo="imagem.png"):
     caminho_arquivo = os.path.join("imagens", nome_arquivo)  # Caminho completo
@@ -97,7 +136,7 @@ def gerar_imagem(dados, titulo="ABS", nome_arquivo="imagem.png"):
     plt.imshow(np.abs(dados_rotacionados), cmap="gray", interpolation="nearest")
     plt.title(titulo)
     plt.savefig(caminho_arquivo)
-
+    plt.close()  # Fecha a figura para liberar memória
 
 def process(data):
     user = data["user"]
@@ -105,28 +144,30 @@ def process(data):
     alg = data["alg"]
     sinais = data["sinais"]
 
-    while not check_memory():
-        print("Waiting for memory...")
+    while not memory_monitor.check_memory():
+        logger.info("Waiting for memory...")
         time.sleep(1)
 
-    H = pd.read_csv("cliente/dados/" + data["H"], header=None, delimiter=",").to_numpy()
-    g = pd.read_csv("cliente/dados/" + data["g"], header=None, delimiter=",").to_numpy()
+    try:
+        # Carrega H e g como arrays NumPy
+        H = pd.read_csv("cliente/dados/" + data["H"], header=None, delimiter=",").to_numpy()
+        g = pd.read_csv("cliente/dados/" + data["g"], header=None, delimiter=",").to_numpy()
+    except Exception as e:
+        logger.error(f"Erro ao carregar arquivos: {e}")
+        return jsonify({"error": "Erro ao carregar arquivos. Verifique se os arquivos são válidos."}), 400
 
     start_time = time.time()
     if alg == "CGNR":
-        print("Utilizando o CGNR")
+        logger.info(f"Utilizando o CGNR para o usuário {user}")
         resultado, iteracoes = CGNR(H, g)
     else:
-        print("Utilizando o CGNE")
+        logger.info(f"Utilizando o CGNE para o usuário {user}")
         resultado, iteracoes = CGNE(H, g)
     end_time = time.time()
 
     # Gerar imagem e salvar
     heatmap_data = resultado.reshape(modelo["rows"], modelo["cols"])
     nome_arquivo = f"imagem_{user}_{int(end_time)}.png"
-    # thread =  threading.Thread(gerar_imagem(heatmap_data, nome_arquivo=nome_arquivo))
-    # thread = threading.Thread(target=gerar_imagem, args=(heatmap_data,), kwargs={'nome_arquivo': nome_arquivo})
-    # thread.start()
     process = multiprocessing.Process(
         target=gerar_imagem, args=(heatmap_data,), kwargs={"nome_arquivo": nome_arquivo}
     )
@@ -154,28 +195,14 @@ def process(data):
     with open(caminho_json, "w") as json_file:
         json.dump(resposta_json, json_file, indent=4)
 
+    logger.info(f"Requisição do usuário {user} concluída em {tempo_execucao:.2f} segundos.")
     return jsonify(resposta_json)
-
-
-def check_memory():
-    mem = psutil.virtual_memory()
-    available_mb = mem.available / (1024 * 1024)
-    total_mb = mem.total / (1024 * 1024)
-    used_mb = (mem.total - mem.available) / (1024 * 1024)
-
-    print(
-        f"Used memory: {used_mb:.2f} MB | Free memory: {available_mb:.2f} MB | Total memory: {total_mb:.2f} MB "
-        f"({(available_mb / total_mb) * 100:.2f}% free)"
-    )
-
-    return available_mb > MIN_FREE_MEMORY_MB
-
 
 @app.route("/reconstruir_imagem", methods=["POST"])
 async def reconstruir_imagem():
     data = request.json
+    logger.info(f"Requisição recebida do usuário {data['user']}")
     return await asyncio.to_thread(process, data)
-
 
 @app.route("/status_servidor", methods=["GET"])
 def status_servidor():
@@ -189,7 +216,6 @@ def status_servidor():
             "memory_total": memory_info.total,
         }
     )
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)
